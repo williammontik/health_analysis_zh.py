@@ -129,6 +129,7 @@ def analyze_health_zh():
         summary = extract_block(response_text, "[SUMMARY_START]", "[SUMMARY_END]")
         suggestions = extract_block(response_text, "[SUGGESTIONS_START]", "[SUGGESTIONS_END]")
 
+        # 🔧 Fix: no backslashes inside f-string expressions
         summary_html = summary.replace('\n', '<br>')
         suggestions_html = suggestions.replace('\n', '<br>')
 
@@ -137,7 +138,7 @@ def analyze_health_zh():
         <p>{summary_html}</p>
         <h4>{LABELS_ZH['suggestions_title']}</h4>
         <p>{suggestions_html}</p>
-        <p style=\"margin-top:30px;font-size:14px;color:#888;\">
+        <p style="margin-top:30px;font-size:14px;color:#888;">
           🤖 此报告由 KataChat AI 健康分析系统自动生成，仅供参考。我们不会存储您的任何个人数据。
         </p>
         """
