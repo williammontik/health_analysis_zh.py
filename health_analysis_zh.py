@@ -28,9 +28,6 @@ LABELS_ZH = {
 
 # --- PROMPT ENGINEERING (CHINESE) ---
 def build_single_request_prompt_zh(age, gender, country, concern, notes):
-    """
-    Builds a single, comprehensive prompt asking the AI for all three parts at once.
-    """
     return (
         f"你是一位专业的健康分析师。请根据以下个人档案，严格按照指定的格式，一次性完成三项任务。\n\n"
         f"**个人档案:**\n"
