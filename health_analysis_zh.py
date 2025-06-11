@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-import os, logging, smtplib, traceback
+import os, logging, smtplib, traceback, re
 from datetime import datetime
 from dateutil import parser
 from email.mime.text import MIMEText
@@ -18,20 +18,20 @@ SMTP_PORT = 587
 SMTP_USERNAME = "kata.chatbot@gmail.com"
 SMTP_PASSWORD = os.getenv("SMTP_PASSWORD")
 
-# --- Language Constants (zh-TW for Traditional Chinese) ---
+# --- Language Constants (Translated to zh-CN) ---
 LANGUAGE = {
-    "zh-TW": {
-        "email_subject": "您的健康洞察報告",
-        "report_title": "🎉 全球健康洞察報告"
+    "zh": {
+        "email_subject": "您的健康洞察报告",
+        "report_title": "🎉 全球健康洞察报告"
     }
 }
 
 LANGUAGE_TEXTS = {
-    "zh-TW": {
-        "name": "法定全名", "dob": "出生日期", "country": "國家", "gender": "性別",
-        "age": "年齡", "height": "身高 (公分)", "weight": "體重 (公斤)", "concern": "主要問題",
-        "desc": "補充說明", "ref": "推薦人", "angel": "健康夥伴",
-        "footer": "📩 此報告已透過電子郵件發送給您。所有內容均由 KataChat AI 生成，並符合個資法規定。"
+    "zh": {
+        "name": "法定全名", "dob": "出生日期", "country": "国家", "gender": "性别",
+        "age": "年龄", "height": "身高 (厘米)", "weight": "体重 (公斤)", "concern": "主要问题",
+        "desc": "补充说明", "ref": "推荐人", "angel": "健康伙伴",
+        "footer": "📩 此报告已通过电子邮件发送给您。所有内容均由 KataChat AI 生成，并符合个人信息保护法规定。"
     }
 }
 
@@ -43,88 +43,96 @@ def compute_age(dob):
         return today.year - dt.year - ((today.month, today.day) < (dt.month, dt.day))
     except: return 0
 
-# --- AI Prompts (Traditional Chinese) ---
+# --- AI Prompts (Simplified Chinese) ---
 def build_summary_prompt(age, gender, country, concern, notes, metrics):
     metrics_summary = ", ".join([f"{label} ({value}%)" for block in metrics for label, value in zip(block["labels"], block["values"])][:9])
     return (
-        f"任務：為一位來自 {country} 的 {age} 歲 {gender} 撰寫一份四段式的健康分析，其主要問題是「{concern}」。請使用以下數據：{metrics_summary}。\n\n"
+        f"任务：为一位来自 {country} 的 {age} 岁 {gender} 撰写一份四段式的健康分析，其主要问题是“{concern}”。请使用以下数据：{metrics_summary}。\n\n"
         f"指令：\n"
-        f"1. **深入分析**：不要只重複數據。請解釋這些百分比數字對這個用戶群體意味著什麼，並分析它們之間的聯繫。例如，高皮脂分泌如何影響皮膚問題。\n"
-        f"2. **內容豐富**：每個段落都應提供有價值的見解和背景資訊，使其內容充實。\n"
-        f"3. **專業且匿名**：語氣應充滿同理心但專業。嚴禁使用「你」、「我」等代詞。請使用「該年齡段的女性…」或「來自 {country} 的個體…」等措辭。\n"
-        f"4. **整合數據**：每段話中都必須自然地融入至少一個具體的百分比數據。"
+        f"1. **深入分析**：不要只重复数据。请解释这些百分比数字对这个用户群体意味着什么，并分析它们之间的联系。例如，高皮脂分泌如何影响皮肤问题。\n"
+        f"2. **内容丰富**：每个段落都应提供有价值的见解和背景信息，使其内容充实。\n"
+        f"3. **专业且匿名**：语气应充满同理心但专业。严禁使用“你”、“我”等代词。请使用“该年龄段的女性...”或“来自 {country} 的个体...”等措辞。\n"
+        f"4. **整合数据**：每段话中都必须自然地融入至少一个具体的百分比数据。"
     )
 
 def build_suggestions_prompt(age, gender, country, concern, notes):
     return (
-        f"為一位來自 {country}、{age} 歲、關注「{concern}」的「{gender}」，提出 10 項具體而溫和的生活方式改善建議。"
-        f"請使用溫暖、支持的語氣，並包含有幫助的表情符號。"
-        f"建議應實用、符合文化習慣且具滋養性。"
-        f"⚠️ **嚴格指令**：請勿使用姓名、代詞（她/她的/他/他的）或「該個體」等詞語。"
-        f"僅使用如「在 {country} 60多歲的女性」或「面臨此問題的個體」等描述。"
+        f"为一位来自 {country}、{age} 岁、关注“{concern}”的“{gender}”，提出 10 项具体而温和的生活方式改善建议。"
+        f"请使用温暖、支持的语气，并包含有帮助的表情符号。"
+        f"建议应实用、符合文化习惯且具滋养性。"
+        f"⚠️ **严格指令**：请勿使用姓名、代词（她/她的/他/他的）或“该个体”等词语。"
+        f"仅使用如“在 {country} 60多岁的女性”或“面临此问题的个体”等描述。"
     )
 
-# --- OpenAI Interaction ---
+# --- OpenAI Interaction (Matches English Version) ---
 def get_openai_response(prompt, temp=0.7):
     try:
         result = client.chat.completions.create(
-            model="gpt-4o", messages=[{"role": "user", "content": prompt}], temperature=temp
+            model="gpt-3.5-turbo",
+            messages=[{"role": "user", "content": prompt}],
+            temperature=temp
         )
         return result.choices[0].message.content
     except Exception as e:
         logging.error(f"OpenAI error: {e}")
-        return "⚠️ 無法生成回應。"
+        return "⚠️ 无法生成回应。"
 
 def generate_metrics_with_ai(prompt):
     try:
         res = client.chat.completions.create(
-            model="gpt-4o", messages=[{"role": "user", "content": prompt}], temperature=0.7
+            model="gpt-3.5-turbo",
+            messages=[{"role": "user", "content": prompt}],
+            temperature=0.7
         )
         lines = res.choices[0].message.content.strip().split("\n")
         metrics = []
         current_title, labels, values = "", [], []
         for line in lines:
             if line.startswith("###"):
-                if current_title: metrics.append({"title": current_title, "labels": labels, "values": values})
-                current_title, labels, values = line.replace("###", "").strip(), [], []
+                if current_title and labels and values:
+                    metrics.append({"title": current_title, "labels": labels, "values": values})
+                current_title = line.replace("###", "").strip()
+                labels, values = [], []
             elif ":" in line:
                 try:
                     label, val = line.split(":", 1)
                     labels.append(label.strip())
                     values.append(int(val.strip().replace("%", "")))
-                except ValueError: continue
-        if current_title: metrics.append({"title": current_title, "labels": labels, "values": values})
-        return metrics or [{"title": "預設指標", "labels": ["指標A", "指標B"], "values": [50, 75]}]
+                except ValueError:
+                    continue
+        if current_title and labels and values:
+            metrics.append({"title": current_title, "labels": labels, "values": values})
+        return metrics or [{"title": "默认指标", "labels": ["指标A", "指标B"], "values": [50, 75]}]
     except Exception as e:
         logging.error(f"Chart parse error: {e}")
-        return [{"title": "預設指標", "labels": ["指標A", "指標B"], "values": [50, 75]}]
+        return [{"title": "默认指标", "labels": ["指标A", "指标B"], "values": [50, 75]}]
 
 # --- HTML & Email Generation ---
 def generate_footer_html():
     return """
     <div style="margin-top: 40px; border-left: 4px solid #4CAF50; padding-left: 15px; font-family: sans-serif;">
-        <h3 style="font-size: 22px; font-weight: bold; color: #333;">📊 由 KataChat AI 生成的見解</h3>
+        <h3 style="font-size: 22px; font-weight: bold; color: #333;">📊 由 KataChat AI 生成的见解</h3>
         <p style="font-size: 18px; color: #555; line-height: 1.6;">
-            此健康報告是使用 KataChat 的專有 AI 模型生成的，基於：
+            此健康报告是使用 KataChat 的专有 AI 模型生成的，基于：
         </p>
         <ul style="list-style-type: disc; padding-left: 20px; font-size: 18px; color: #555; line-height: 1.6;">
-            <li>來自新加坡、馬來西亞和台灣用戶的匿名健康與生活方式資料庫</li>
-            <li>來自可信的 OpenAI 研究數據庫的全球健康基準和行為趨勢數據</li>
+            <li>来自新加坡、马来西亚和台湾用户的匿名健康与生活方式资料库</li>
+            <li>来自可信的 OpenAI 研究数据库的全球健康基准和行为趋势数据</li>
         </ul>
         <p style="font-size: 18px; color: #555; line-height: 1.6;">
-            所有分析嚴格遵守個人資料保護法規，以保護您的個人資料，同時發掘有意義的健康洞察。
+            所有分析严格遵守个人数据保护法规，以保护您的个人资料，同时发掘有意义的健康洞察。
         </p>
         <p style="font-size: 18px; color: #555; line-height: 1.6; margin-top: 15px;">
-            🛡️ <strong>請注意：</strong>本報告並非醫療診斷。若有任何嚴重的健康問題，請諮詢持牌醫療專業人員。
+            🛡️ <strong>请注意：</strong>本报告并非医疗诊断。若有任何严重的健康问题，请咨询持牌医疗专业人员。
         </p>
         <p style="font-size: 18px; color: #555; line-height: 1.6; margin-top: 15px;">
-            📬 <strong>附註：</strong>個人化報告將在 24-48 小時內發送到您的電子郵件。若您想更詳細地探討報告結果，我們很樂意安排一個 15 分鐘的簡短通話。
+            📬 <strong>附注：</strong>个性化报告将在 24-48 小时内发送到您的电子邮箱。若您想更详细地探讨报告结果，我们很乐意安排一个 15 分钟的简短通话。
         </p>
     </div>
     """
 
 def send_email(html_body, lang):
-    subject = LANGUAGE.get(lang, {}).get("email_subject", "Health Report")
+    subject = LANGUAGE.get(lang, {"email_subject": "Health Report"})['email_subject']
     msg = MIMEText(html_body, 'html', 'utf-8')
     msg['Subject'] = subject
     msg['From'] = SMTP_USERNAME
@@ -134,79 +142,105 @@ def send_email(html_body, lang):
             server.starttls()
             server.login(SMTP_USERNAME, SMTP_PASSWORD)
             server.send_message(msg)
-            logging.info(f"Email sent to {SMTP_USERNAME} for language {lang}")
     except Exception as e:
         logging.error(f"Email send error: {e}")
 
-# --- Flask Endpoint ---
+# --- Flask Endpoints ---
 @app.route("/health_analyze", methods=["POST"])
 def health_analyze():
     try:
         data = request.get_json(force=True)
-        lang = data.get("lang", "zh-TW").strip()
+        logging.debug(f"POST received: {data}")
 
-        if lang not in LANGUAGE:
-            return jsonify({"error": f"Language '{lang}' not supported."}), 400
-
-        labels = LANGUAGE_TEXTS[lang]
-        content_lang = LANGUAGE[lang]
+        lang = data.get("lang", "zh").strip().lower()
+        labels = LANGUAGE_TEXTS.get(lang, LANGUAGE_TEXTS["zh"])
         
         dob = f"{data.get('dob_year')}-{str(data.get('dob_month')).zfill(2)}-{str(data.get('dob_day')).zfill(2)}"
         age = compute_age(dob)
         
-        user_info = {k: data.get(k) for k in ["name", "chinese_name", "gender", "height", "weight", "country", "condition", "referrer", "angel"]}
-        user_info.update({"dob": dob, "age": age, "notes": data.get("details") or "無補充說明"})
+        user_info = {
+            "name": data.get("name"), "chinese_name": data.get("chinese_name"), "dob": dob, "age": age,
+            "gender": data.get("gender"), "height": data.get("height"), "weight": data.get("weight"),
+            "country": data.get("country"), "condition": data.get("condition"),
+            "notes": data.get("details") or "无补充说明",
+            "ref": data.get("referrer"), "angel": data.get("angel")
+        }
 
         chart_prompt = (
-            f"這是一位來自 {user_info['country']} 的 {user_info['age']} 歲 {user_info['gender']}，其健康問題為「{user_info['condition']}」。補充說明：{user_info['notes']}\n\n"
-            f"請根據此問題生成 3 個不同的健康相關指標類別，每個類別以 '###' 開頭，並包含 3 個指標。"
+             f"这是一位来自 {user_info['country']} 的 {user_info['age']} 岁 {user_info['gender']}，其健康问题为“{user_info['condition']}'。补充说明：{user_info['notes']}\n\n"
+             f"请根据此问题生成 3 个不同的健康相关指标类别，每个类别以 '###' 开头，并包含 3 个指标。"
         )
-
         metrics = generate_metrics_with_ai(chart_prompt)
-        
+
         summary_prompt = build_summary_prompt(age, user_info['gender'], user_info['country'], user_info['condition'], user_info['notes'], metrics)
         summary = get_openai_response(summary_prompt)
-        if "⚠️" in summary: summary = "💬 由於系統延遲，摘要暫時無法使用。"
+        if "⚠️" in summary:
+            summary = "💬 摘要暂时无法使用。"
 
         suggestions_prompt = build_suggestions_prompt(age, user_info['gender'], user_info['country'], user_info['condition'], user_info['notes'])
         creative = get_openai_response(suggestions_prompt, temp=0.85)
-        if "⚠️" in creative: creative = "💡 目前無法載入建議。請稍後再試。"
+        if "⚠️" in creative:
+            creative = "💡 生活建议目前无法载入。"
 
-        html_result = "<div style='font-family: sans-serif; color: #333;'>"
-        html_result += "<div style='font-size:24px; font-weight:bold; margin-top:30px;'>🧠 摘要:</div>"
-        html_result += "".join([f"<p style='line-height:1.7; font-size:16px; margin-top:1em; margin-bottom:1em;'>{p.strip()}</p>" for p in summary.strip().split('\n\n') if p.strip()])
-        
-        html_result += "<div style='font-size:24px; font-weight:bold; margin-top:40px;'>💡 生活建議:</div>"
-        html_result += "".join([f"<p style='margin:16px 0; font-size:17px; line-height:1.6;'>{line}</p>" for line in creative.split("\n") if line.strip()])
-        
-        html_result += generate_footer_html() + "</div>"
-        
-        # --- Build and Send Email ---
-        # **FIXED: Simplified the email content to prevent crashes.**
-        # The complex charts_html section has been removed from the email.
-        
-        data_table = f"<div style='margin-top:20px; font-size:16px; font-family: sans-serif;'><strong>📌 您提交的資訊:</strong><br><br><ul style='line-height:1.8; padding-left:18px;'>"
-        for key, value in user_info.items():
-            label_text = labels.get(key, key.replace('_', ' ').title())
-            if key == 'chinese_name': label_text = "🈶 中文姓名"
-            data_table += f"<li><strong>{label_text}:</strong> {value}</li>"
-        data_table += "</ul></div>"
+        summary_clean = re.sub(r'(\n\s*\n)+', '\n', summary.strip())
+        html_result = f"<div style='font-size:24px; font-weight:bold; margin-top:30px;'>🧠 摘要:</div><br>"
+        html_result += f"<div style='line-height:1.7; font-size:16px; margin-bottom:4px;'>{summary_clean.replace(chr(10), '<br>')}</div>"
+        html_result += f"<div style='font-size:24px; font-weight:bold; margin-top:30px;'>💡 生活建议:</div><br>"
+        html_result += ''.join([f"<p style='margin:16px 0; font-size:17px;'>{line}</p>" for line in creative.split("\n") if line.strip()])
+        html_result += generate_footer_html()
 
-        # The email will contain the user's data and the full AI-generated report.
-        full_email_html = data_table + html_result.replace('sans-serif', 'Arial, sans-serif')
+        charts_html = "<div style='margin-top:30px;'><strong style='font-size:18px;'>📈 健康指标分析:</strong><br><br>"
+        for block in metrics:
+            charts_html += f"<h4 style='margin-bottom:6px; margin-top:20px;'>{block['title']}</h4>"
+            for label, value in zip(block['labels'], block['values']):
+                charts_html += f"""
+                <div style='margin:6px 0;'><span style='font-size:15px;'>{label}: {value}%</span><br>
+                    <div style='background:#eee; border-radius:6px; width:100%; max-width:500px; height:14px;'>
+                        <div style='width:{value}%; background:#4CAF50; height:14px; border-radius:6px;'></div>
+                    </div></div>"""
+        charts_html += "</div>"
+
+        data_table = f"""
+        <div style='margin-top:20px; font-size:16px; font-family: sans-serif;'>
+            <strong>📌 您提交的信息:</strong><br><br>
+            <ul style='line-height:1.8; padding-left:18px;'>
+                <li><strong>{labels['name']}:</strong> {user_info['name']}</li>
+                <li><strong>🈶 中文姓名:</strong> {user_info['chinese_name']}</li>
+                <li><strong>{labels['dob']}:</strong> {user_info['dob']}</li>
+                <li><strong>{labels['age']}:</strong> {user_info['age']}</li>
+                <li><strong>{labels['gender']}:</strong> {user_info['gender']}</li>
+                <li><strong>{labels['country']}:</strong> {user_info['country']}</li>
+                <li><strong>{labels['height']}:</strong> {user_info['height']} cm</li>
+                <li><strong>{labels['weight']}:</strong> {user_info['weight']} kg</li>
+                <li><strong>{labels['concern']}:</strong> {user_info['concern']}</li>
+                <li><strong>{labels['desc']}:</strong> {user_info['notes']}</li>
+                <li><strong>{labels['ref']}:</strong> {user_info['ref']}</li>
+                <li><strong>{labels['angel']}:</strong> {user_info['angel']}</li>
+            </ul></div>"""
+        
+        full_email_html = data_table + html_result.replace('sans-serif', 'Arial, sans-serif') + charts_html
         send_email(full_email_html, lang)
-        
+
         return jsonify({
             "metrics": metrics,
             "html_result": html_result,
-            "footer": labels.get('footer'),
-            "report_title": content_lang.get('report_title')
+            "footer": labels['footer']
         })
 
     except Exception as e:
         logging.error(f"Health analyze error: {e}")
         traceback.print_exc()
-        return jsonify({"error": "發生未預期的伺服器錯誤。"}), 500
+        return jsonify({"error": "发生未预期的服务器错误。"}), 500
+
+# **NEW** WAKEUP ENDPOINT TO PREVENT TIMEOUTS
+@app.route("/wakeup", methods=["GET"])
+def wakeup():
+    """
+    This endpoint does nothing but return a success message.
+    Its only purpose is to wake up a sleeping server on a free tier.
+    """
+    return jsonify({"status": "I am awake."})
+
 
 if __name__ == "__main__":
     app.run(debug=True, port=int(os.getenv("PORT", 5000)), host="0.0.0.0")
