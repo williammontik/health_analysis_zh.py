@@ -46,20 +46,17 @@ def compute_age(dob):
 # --- AI Prompts (Simplified Chinese) ---
 def build_summary_prompt(age, gender, country, concern, notes, metrics):
     """
-    **FIXED:** This prompt is now much more detailed to generate richer content.
+    **FIXED:** This prompt is optimized for speed while still aiming for rich content.
     """
-    metrics_summary = ", ".join([f"“{label}”为 {value}%" for block in metrics for label, value in zip(block["labels"], block["values"])][:9])
+    metrics_summary = ", ".join([f"{label} ({value}%)" for block in metrics for label, value in zip(block["labels"], block["values"])][:9])
     return (
-        f"请为一位来自 {country}、{age} 岁的 {gender}（其主要健康问题是“{concern}”）撰写一份非常详细、富有洞察力且内容丰富的四段式健康分析报告。"
-        f"必须使用以下数据进行分析: {metrics_summary}。额外备注: {notes}。\n\n"
-        f"**核心指令:**\n"
-        f"1.  **深度与关联性:** 不要仅仅陈述数据。请深入解释这些指标为何重要，以及它们对这个特定人群意味着什么。在每个段落中，将多个相关的指标联系起来进行综合分析，解释它们之间的相互影响。例如，如果‘皮脂分泌’很高，请解释这如何与‘毛孔堵塞’或‘皮肤问题’相关联，并可能联系到饮食或环境因素。\n"
-        f"2.  **内容充实:** 确保每个段落都内容充实，长度在4到5句话左右，以提供有意义、有深度的见解，就像专业的健康顾问那样。\n"
-        f"3.  **引用数据:** 每段必须至少引用一个来自上方列表的确切百分比数据，并自然地融入句子中。\n"
-        f"4.  **匿名与语气:** 绝对禁止使用任何个人代词（如你/我/他/她）。仅使用群体式描述（例如“对于在 {country} 的年轻女性…”）。语气必须温和、专业且充满同理心。\n\n"
-        f"**优秀范例参考:** '在 {country}，{age} 岁的年轻女性常常面临各种皮肤问题，这是一个重要的健康话题。在这个年龄段，皮脂分泌水平高达 82%，这可能直接导致毛孔堵塞和痤疮的发生，而皮肤湿润度为 76% 则表明尽管出油，皮肤内部仍可能缺水。'"
+        f"任务：为一位来自 {country} 的 {age} 岁 {gender} 撰写一份四段式的健康分析，其主要问题是“{concern}”。请使用以下数据：{metrics_summary}。\n\n"
+        f"指令：\n"
+        f"1. **深入分析**：不要只重复数据。请解释这些百分比数字对这个用户群体意味着什么，并分析它们之间的联系。例如，高皮脂分泌如何影响皮肤问题。\n"
+        f"2. **内容丰富**：每个段落都应提供有价值的见解和背景信息，使其内容充实。\n"
+        f"3. **专业且匿名**：语气应充满同理心但专业。严禁使用“你”、“我”等代词。请使用“该年龄段的女性...”或“来自 {country} 的个体...”等措辞。\n"
+        f"4. **整合数据**：每段话中都必须自然地融入至少一个具体的百分比数据。"
     )
-
 
 def build_suggestions_prompt(age, gender, country, concern, notes):
     return (
@@ -128,20 +125,6 @@ def generate_footer_html():
         </p>
     </div>
     """
-
-def send_email(html_body):
-    subject = LANGUAGE["zh"]['email_subject']
-    msg = MIMEText(html_body, 'html', 'utf-8')
-    msg['Subject'] = subject
-    msg['From'] = SMTP_USERNAME
-    msg['To'] = SMTP_USERNAME
-    try:
-        with smtplib.SMTP(SMTP_SERVER, SMTP_PORT) as server:
-            server.starttls()
-            server.login(SMTP_USERNAME, SMTP_PASSWORD)
-            server.send_message(msg)
-    except Exception as e:
-        logging.error(f"Email send error: {e}")
 
 # --- Flask Endpoint ---
 @app.route("/health_analyze", methods=["POST"])
