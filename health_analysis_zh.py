@@ -27,7 +27,6 @@ LABELS_ZH = {
 }
 
 # --- PROMPT ENGINEERING (CHINESE) ---
-# **NEW:** A single function to build one powerful prompt
 def build_single_request_prompt_zh(age, gender, country, concern, notes):
     """
     Builds a single, comprehensive prompt asking the AI for all three parts at once.
@@ -75,18 +74,18 @@ def get_openai_response(prompt, temp=0.75):
             model="gpt-4o",
             messages=[{"role": "user", "content": prompt}],
             temperature=temp,
-            max_tokens=2000 # Increased for the larger single response
+            max_tokens=2000
         )
         return result.choices[0].message.content
     except Exception as e:
         logging.error(f"OpenAI API call failed: {e}")
         return "⚠️ AI响应生成失败，请稍后再试。"
 
-# **NEW:** Helper functions to parse the single AI response
 def parse_metrics_from_response(response_text):
     try:
         metrics_str = response_text.split("[METRICS_START]")[1].split("[METRICS_END]")[0].strip()
         metrics, current_title, labels, values = [], "", [], []
         for line in metrics_str.strip().split("\n"):
             line = line.strip()
+            # ** THIS IS THE CORRECTED LINE **
             if not line or line.startswith("
