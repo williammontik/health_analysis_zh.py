@@ -58,20 +58,20 @@ def build_summary_prompt(age, gender, country, concern, notes, metrics):
         [f"{label} ({value}%)" for block in metrics for label, value in zip(block["labels"], block["values"])][:9]
     )
     return (
-        f"任务：为一位来自 {country} 的 {age} 岁 {gender} 撰写一份四段式的健康分析，其主要问题是“{concern}”。\n\n"
-        f"请严格遵守以下格式要求：\n"
-        f"1. 首句格式：每段开头请使用“在相似群体中的{age}岁{gender}”或“在该年龄段的{age}岁个体中”，不要使用“在分析…时”或“在…的…中”。\n"
-        f"2. 深入分析：不要只重复数据。请解释这些百分比数字对该人群意味着什么，并分析它们的联系。\n"
-        f"3. 内容丰富：每段都应提供有价值的见解和背景信息，使内容充实。\n"
-        f"4. 专业且匿名：语气应充满同理心但专业。严禁使用“你”“我”等代词。\n"
-        f"5. 整合数据：每段中自然融入至少一个具体百分比数据。\n\n"
-        f"数据摘要：{metrics_summary}"
+        f"任务：为一位来自 {country} 的 {age} 岁 {gender} 撰写一份四段式的健康分析，其主要问题是“{concern}”。请使用以下数据：{metrics_summary}。\n\n"
+        "指令：\n"
+        "1. 首句格式：每段开头请使用“在相似群体中的"
+        f"{age}岁{gender}”或“在该年龄段的{age}岁个体中”，不要使用“在分析…时”或“在…的…中”。\n"
+        "2. 深入分析：不要只重复数据。请解释这些百分比数字对该人群意味着什么，并分析它们之间的联系。\n"
+        "3. 内容丰富：每个段落都应提供有价值的见解和背景信息，使其内容充实。\n"
+        "4. 专业且匿名：语气应充满同理心但专业。严禁使用“你”“我”等代词。\n"
+        "5. 整合数据：每段中自然融入至少一个具体百分比数据。"
     )
 
 
 def build_suggestions_prompt(age, gender, country, concern, notes):
     return (
-        f"为一位来自 {country}、{age} 岁、关注“{concern}”的{gender}，提出10项具体而温和的生活方式改善建议。\n"
+        f"为一位来自 {country}、{age} 岁、关注“{concern}”的{gender}，提出 10 项具体而温和的生活方式改善建议。\n"
         "⚠️ 严格指令：请勿在首行添加任何寒暄（如“当然可以”），直接以列表形式给出建议。\n"
         "建议应实用、符合文化习惯且具滋养性，并带有适量表情符号（如🌱、💡等）。"
     )
@@ -80,9 +80,7 @@ def build_suggestions_prompt(age, gender, country, concern, notes):
 def get_openai_response(prompt, temp=0.7):
     try:
         result = client.chat.completions.create(
-            model="gpt-4o",
-            messages=[{"role": "user", "content": prompt}],
-            temperature=temp
+            model="gpt-4o", messages=[{"role": "user", "content": prompt}], temperature=temp
         )
         return result.choices[0].message.content
     except Exception as e:
@@ -93,9 +91,7 @@ def get_openai_response(prompt, temp=0.7):
 def generate_metrics_with_ai(prompt):
     try:
         res = client.chat.completions.create(
-            model="gpt-4o",
-            messages=[{"role": "user", "content": prompt}],
-            temperature=0.7
+            model="gpt-4o", messages=[{"role": "user", "content": prompt}], temperature=0.7
         )
         lines = res.choices[0].message.content.strip().split("\n")
         metrics = []
@@ -119,7 +115,7 @@ def generate_metrics_with_ai(prompt):
         logging.error(f"Chart parse error: {e}")
         return [{"title": "默认指标", "labels": ["指标A", "指标B"], "values": [50, 75]}]
 
-# --- HTML & Email Generation (Retain original structure) ---
+# --- HTML & Email Generation ---
 def generate_user_data_html(user_info, labels):
     html = """
     <h2 style="font-family: sans-serif; color: #333; border-bottom: 2px solid #4CAF50; padding-bottom: 5px;">个人资料摘要</h2>
@@ -171,13 +167,14 @@ def generate_footer_html():
             🛡️ <strong>请注意：</strong>本报告并非医疗诊断。若有任何严重的健康问题，请咨询持牌医疗专业人员。
         </p>
         <p style="font-size: 18px; color: #555; line-height: 1.6; margin-top: 15px;">
-            📬 <strong>附注：</strong>个性化报告将在 24-48 小时内发送到您的电子邮箱。若您想更详细地探讨报告结果，我们很乐意安排一个 15 分钟的简短通话。
+            📬 <strong>附注：</strong>个性化报告将在 24-48 小时内发送到您的전자邮件。若您想更详细地探讨报告结果，我们很乐意安排一个 15 分钟的简短通话。
         </p>
     </div>
     """
 
 
 def send_email_report(recipient_email, subject, body):
+    """Connects to SMTP server and sends the complete HTML report."""
     if not all([SMTP_SERVER, SMTP_USERNAME, SMTP_PASSWORD]):
         logging.warning("SMTP settings are not fully configured. Skipping email.")
         return
@@ -208,7 +205,9 @@ def health_analyze():
         content_lang = LANGUAGE[lang]
         dob = f"{data.get('dob_year')}-{str(data.get('dob_month')).zfill(2)}-{str(data.get('dob_day')).zfill(2)}"
         age = compute_age(dob)
-        user_info = {k: data.get(k) for k in ["name", "chinese_name", "gender", "height", "weight", "country", "condition", "referrer", "angel", "details"]}
+        user_info = {k: data.get(k) for k in [
+            "name", "chinese_name", "gender", "height", "weight", "country", "condition", "referrer", "angel", "details"
+        ]}
         user_info.update({"dob": dob, "age": age, "notes": data.get("details") or "无补充说明"})
 
         # --- AI Generation ---
@@ -220,50 +219,43 @@ def health_analyze():
 所有百分比必须介于 25% 到 90% 之间。
 仅返回 3 个格式化的区块，不要有任何介绍或解释。
 """
-        metrics = generate_metrics_with_ai(chart_prompt)(chart_prompt)
-        summary_prompt = build_summary_prompt(age, user_info['gender'], user_info['country'], user_info['condition'], user_info['notes'], metrics)
-        summary = get_openai_response(summary_prompt)
-        suggestions_prompt = build_suggestions_prompt(age, user_info['gender'], user_info['country'], user_info['condition'], user_info['notes'])
-        creative = get_openai_response(suggestions_prompt, temp=0.85)
+        metrics = generate_metrics_with_ai(chart_prompt)
 
-        # --- Post-process formatting ---
-        summary = re.sub(r'^(在分析[^。]+时)', lambda m: m.group(1).replace("在分析", "在相似群体中的"), summary)
-        creative = re.sub(r'^当然可以！\s*', '', creative)
+        summary = get_openai_response(build_summary_prompt(age, user_info['gender'], user_info['country'], user_info['condition'], user_info['notes'], metrics))
+        creative = get_openai_response(build_suggestions_prompt(age, user_info['gender'], user_info['country'], user_info['condition'], user_info['notes']), temp=0.85)
 
-        # --- Build the COMPLETE HTML BODY for the EMAIL ---
+        # Post-process
+        summary = re.sub(r'^(在分析[^。]+时)', lambda m: m.group(1).replace("在分析","在相似群体中的"), summary)
+        creative = re.sub(r'^当然可以！\s*','', creative)
+
+        # --- Build Email Body ---
         email_html_body = f"""
-        <div style='font-family: sans-serif; color: #333; max-width: 800px; margin: auto; padding: 20px;'>
-            <h1 style='text-align:center; color: #333;'>{content_lang.get('report_title')}</h1>
-            {generate_user_data_html(user_info, labels)}
-            {generate_custom_charts_html(metrics)}
-            <div style="margin-top: 30px;">```   
-            <h2 style="font-family: sans-serif; color: #333; border-bottom: 2px solid #4CAF50; padding-bottom: 5px;">🧠 摘要</h2>
-            {''.join([f"<p style='line-height:1.7; font-size:16px;'>{p.strip()}</p>" for p in summary.strip().split('  ') if p.strip()])}
-            </div>
-            <div style="margin-top: 30px;">
-                <h2 style="font-family: sans-serif; color: #333; border-bottom: 2px solid #4CAF50; padding-bottom: 5px;">💡 生活建议</h2>
-                {''.join([f"<p style='margin:12px 0; font-size:16px; line-height:1.6;'>{line}</p>" for line in creative.splitlines() if line.strip()])}
-            </div>
-            {generate_footer_html()}
-        </div>
-        """
-        email_subject = f"{content_lang.get('email_subject')} - {user_info.get('name', 'N/A')}"
-        send_email_report(SMTP_USERNAME, email_subject, email_html_body)
+<div style='font-family: sans-serif; color: #333; max-width: 800px; margin: auto; padding: 20px;'>
+  <h1 style='text-align:center; color: #333;'>{content_lang['report_title']}</h1>
+  {generate_user_data_html(user_info, labels)}
+  {generate_custom_charts_html(metrics)}
+  <div style="margin-top: 30px;">
+    <h2 style="font-family: sans-serif; color: #333; border-bottom: 2px solid #4CAF50; padding-bottom: 5px;">🧠 摘要</h2>
+    {''.join([f"<p style='line-height:1.7; font-size:16px;'>{p}</p>" for p in summary.split('\n\n') if p])}
+  </div>
+  <div style="margin-top: 30px;">
+    <h2 style="font-family: sans-serif; color: #333; border-bottom: 2px solid #4CAF50; padding-bottom: 5px;">💡 生活建议</h2>
+    {''.join([f"<p style='margin:12px 0; font-size:16px; line-height:1.6;'>{l}</p>" for l in creative.splitlines() if l])}
+  </div>
+  {generate_footer_html()}
+</div>
+"""
+        send_email_report(SMTP_USERNAME, f"{content_lang['email_subject']} - {user_info.get('name','')}", email_html_body)
 
-        # --- Return the original response structure to the front-end ---
-        html_result_for_web = "<div style='font-family: sans-serif; color: #333;'>"
-        html_result_for_web += "<div style='font-size:24px; font-weight:bold; margin-top:30px;'>🧠 摘要:</div>"
-        html_result_for_web += "".join([f"<p style='line-height:1.7; font-size:16px; margin-top:1em; margin-bottom:1em;'>{p.strip()}</p>" for p in summary.strip().split('\n\n') if p.strip()])
-        html_result_for_web += "<div style='font-size:24px; font-weight:bold; margin-top:40px;'>💡 生活建议:</div>"
-        html_result_for_web += "".join([f"<p style='margin:16px 0; font-size:17px; line-height:1.6;'>{line}</p>" for line in creative.split("\n") if line.strip()])
-        html_result_for_web += generate_footer_html() + "</div>"
-
-        return jsonify({
-            "metrics": metrics,
-            "html_result": html_result_for_web,
-            "footer": labels.get('footer'),
-            "report_title": content_lang.get('report_title')
-        })
+        # --- Web Response ---
+        html_result_for_web = (
+            '<div style="font-family: sans-serif; color: #333;">'
+            f'<h2>🧠 摘要</h2>{"".join([f"<p>{p}</p>" for p in summary.split("\n\n") if p])}'
+            f'<h2>💡 生活建议</h2>{"".join([f"<p>{l}</p>" for l in creative.splitlines() if l])}'
+            + generate_footer_html()
+            + '</div>'
+        )
+        return jsonify({"metrics": metrics, "html_result": html_result_for_web, "footer": labels['footer'], "report_title": content_lang['report_title']})
 
     except Exception as e:
         logging.error(f"Health analyze error: {e}")
