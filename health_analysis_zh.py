@@ -123,8 +123,8 @@ def generate_footer_html():
     </div>
     """
 
-def send_email(html_body, lang):
-    subject = LANGUAGE.get(lang, {}).get('email_subject', 'Health Report')
+def send_email(html_body):
+    subject = LANGUAGE["zh"]['email_subject']
     msg = MIMEText(html_body, 'html', 'utf-8')
     msg['Subject'] = subject
     msg['From'] = SMTP_USERNAME
@@ -144,8 +144,12 @@ def health_analyze():
         data = request.get_json(force=True)
         lang = data.get("lang", "zh").strip().lower()
         
-        labels = LANGUAGE_TEXTS.get(lang, {})
-        content_lang = LANGUAGE.get(lang, {})
+        # Ensure we are only running Chinese logic
+        if lang != 'zh':
+            return jsonify({"error": "This endpoint only supports Chinese (zh) language."}), 400
+
+        labels = LANGUAGE_TEXTS[lang]
+        content_lang = LANGUAGE[lang]
         
         dob = f"{data.get('dob_year')}-{str(data.get('dob_month')).zfill(2)}-{str(data.get('dob_day')).zfill(2)}"
         age = compute_age(dob)
@@ -154,7 +158,7 @@ def health_analyze():
         user_info.update({"dob": dob, "age": age, "notes": data.get("details") or "无补充说明"})
 
         chart_prompt = (
-            f"这是一位来自 {user_info['country']} 的 {user_info['age']} 岁 {user_info['gender']}，其健康问题为“{user_info['concern']}'。补充说明：{user_info['notes']}\n\n"
+            f"这是一位来自 {user_info['country']} 的 {user_info['age']} 岁 {user_info['gender']}，其健康问题为“{user_info['condition']}'。补充说明：{user_info['notes']}\n\n"
             f"请根据此问题生成 3 个不同的健康相关指标类别。\n"
             f"每个类别必须以 '###' 开头（例如 '### 睡眠质量'），并包含 3 个独特的真实世界指标，格式为 '指标名称: 68%'.\n"
             f"所有百分比必须介于 25% 到 90% 之间。\n"
@@ -163,10 +167,14 @@ def health_analyze():
 
         metrics = generate_metrics_with_ai(chart_prompt)
         
-        summary = get_openai_response(build_summary_prompt(age, user_info['gender'], user_info['country'], user_info['concern'], user_info['notes'], metrics))
+        summary_prompt = build_summary_prompt(age, user_info['gender'], user_info['country'], user_info['condition'], user_info['notes'], metrics)
+        summary = get_openai_response(summary_prompt)
         if "⚠️" in summary: summary = "💬 由于系统延迟，摘要暂时无法使用。"
 
-        creative = get_openai_response(build_suggestions_prompt(age, user_info['gender'], user_info['country'], user_info['concern'], user_info['notes']), temp=0.85)
+        # **FIXED BUG:** The `lang` parameter was missing in the original call.
+        # This function no longer needs it as this script is zh-only.
+        suggestions_prompt = build_suggestions_prompt(age, user_info['gender'], user_info['country'], user_info['condition'], user_info['notes'])
+        creative = get_openai_response(suggestions_prompt, temp=0.85)
         if "⚠️" in creative: creative = "💡 目前无法加载建议。请稍后再试。"
 
         html_result = "<div style='font-family: sans-serif; color: #333;'>"
@@ -177,8 +185,9 @@ def health_analyze():
         html_result += "".join([f"<p style='margin:16px 0; font-size:17px; line-height:1.6;'>{line}</p>" for line in creative.split("\n") if line.strip()])
         
         html_result += generate_footer_html() + "</div>"
-
-        # ... (Email generation can be added here if needed) ...
+        
+        # Email logic can be re-enabled if needed
+        # send_email(full_email_html)
 
         return jsonify({
             "metrics": metrics,
