@@ -45,15 +45,21 @@ def compute_age(dob):
 
 # --- AI Prompts (Simplified Chinese) ---
 def build_summary_prompt(age, gender, country, concern, notes, metrics):
-    metrics_summary = ", ".join([f"{label}: {value}%" for block in metrics for label, value in zip(block["labels"], block["values"])][:9])
+    """
+    **FIXED:** This prompt is now much more detailed to generate richer content.
+    """
+    metrics_summary = ", ".join([f"“{label}”为 {value}%" for block in metrics for label, value in zip(block["labels"], block["values"])][:9])
     return (
-        f"为来自 {country}、关注“{concern}”的个体撰写一篇内容丰富的四段式健康洞察分析。"
-        f"分析应侧重于“{gender}”、年龄约 {age} 岁的群体趋势。"
-        f"必须直接且准确地引用以下健康指标: {metrics_summary}。备注: {notes}。"
-        f"⚠️ **严格指令**：请勿使用任何个人代词（如你/我/他/她）。"
-        f"仅使用群体式描述，例如“对于在 {country} 的这个年龄段的人群”或“在 {country} 的年轻女性”。"
-        f"每段必须至少包含一个来自指标的确切百分比。语气必须温暖、自然且富有同理心——避免机械式或临床式的写作风格。"
+        f"请为一位来自 {country}、{age} 岁的 {gender}（其主要健康问题是“{concern}”）撰写一份非常详细、富有洞察力且内容丰富的四段式健康分析报告。"
+        f"必须使用以下数据进行分析: {metrics_summary}。额外备注: {notes}。\n\n"
+        f"**核心指令:**\n"
+        f"1.  **深度与关联性:** 不要仅仅陈述数据。请深入解释这些指标为何重要，以及它们对这个特定人群意味着什么。在每个段落中，将多个相关的指标联系起来进行综合分析，解释它们之间的相互影响。例如，如果‘皮脂分泌’很高，请解释这如何与‘毛孔堵塞’或‘皮肤问题’相关联，并可能联系到饮食或环境因素。\n"
+        f"2.  **内容充实:** 确保每个段落都内容充实，长度在4到5句话左右，以提供有意义、有深度的见解，就像专业的健康顾问那样。\n"
+        f"3.  **引用数据:** 每段必须至少引用一个来自上方列表的确切百分比数据，并自然地融入句子中。\n"
+        f"4.  **匿名与语气:** 绝对禁止使用任何个人代词（如你/我/他/她）。仅使用群体式描述（例如“对于在 {country} 的年轻女性…”）。语气必须温和、专业且充满同理心。\n\n"
+        f"**优秀范例参考:** '在 {country}，{age} 岁的年轻女性常常面临各种皮肤问题，这是一个重要的健康话题。在这个年龄段，皮脂分泌水平高达 82%，这可能直接导致毛孔堵塞和痤疮的发生，而皮肤湿润度为 76% 则表明尽管出油，皮肤内部仍可能缺水。'"
     )
+
 
 def build_suggestions_prompt(age, gender, country, concern, notes):
     return (
@@ -144,7 +150,6 @@ def health_analyze():
         data = request.get_json(force=True)
         lang = data.get("lang", "zh").strip().lower()
         
-        # Ensure we are only running Chinese logic
         if lang != 'zh':
             return jsonify({"error": "This endpoint only supports Chinese (zh) language."}), 400
 
@@ -171,8 +176,6 @@ def health_analyze():
         summary = get_openai_response(summary_prompt)
         if "⚠️" in summary: summary = "💬 由于系统延迟，摘要暂时无法使用。"
 
-        # **FIXED BUG:** The `lang` parameter was missing in the original call.
-        # This function no longer needs it as this script is zh-only.
         suggestions_prompt = build_suggestions_prompt(age, user_info['gender'], user_info['country'], user_info['condition'], user_info['notes'])
         creative = get_openai_response(suggestions_prompt, temp=0.85)
         if "⚠️" in creative: creative = "💡 目前无法加载建议。请稍后再试。"
@@ -186,9 +189,6 @@ def health_analyze():
         
         html_result += generate_footer_html() + "</div>"
         
-        # Email logic can be re-enabled if needed
-        # send_email(full_email_html)
-
         return jsonify({
             "metrics": metrics,
             "html_result": html_result,
