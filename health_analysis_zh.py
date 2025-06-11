@@ -212,19 +212,15 @@ def health_analyze():
         user_info.update({"dob": dob, "age": age, "notes": data.get("details") or "无补充说明"})
 
         # --- AI Generation ---
-        chart_prompt = (
-            f"这是一位来自 {user_info['country']} 的 {user_info['age']} 岁 {user_info['gender']}，其健康问题为“{user_info['condition']}”。补充说明：{user_info['notes']}
+        chart_prompt = f"""
+这是一位来自 {user_info['country']} 的 {user_info['age']} 岁 {user_info['gender']}，其健康问题为“{user_info['condition']}”。补充说明：{user_info['notes']}
 
-"
-            "请根据此问题生成 3 个不同的健康相关指标类别。
-"
-            "每个类别必须以 '###' 开头，并包含 3 个独特的真实世界指标，格式为 '指标名称: 68%'.
-"
-            "所有百分比必须介于 25% 到 90% 之间。
-"
-            "仅返回 3 个格式化的区块，不要有任何介绍或解释。"
-        )
-        metrics = generate_metrics_with_ai(chart_prompt)
+请根据此问题生成 3 个不同的健康相关指标类别。
+每个类别必须以 '###' 开头，并包含 3 个独特的真实世界指标，格式为 '指标名称: 68%'.
+所有百分比必须介于 25% 到 90% 之间。
+仅返回 3 个格式化的区块，不要有任何介绍或解释。
+"""
+        metrics = generate_metrics_with_ai(chart_prompt)(chart_prompt)
         summary_prompt = build_summary_prompt(age, user_info['gender'], user_info['country'], user_info['condition'], user_info['notes'], metrics)
         summary = get_openai_response(summary_prompt)
         suggestions_prompt = build_suggestions_prompt(age, user_info['gender'], user_info['country'], user_info['condition'], user_info['notes'])
