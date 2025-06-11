@@ -121,18 +121,21 @@ def health_analyze_zh():
 
         age = compute_age(data.get("dob_year"))
         details = data.get("details", "无").replace("'''", "'")
+        gender = data.get("gender")
+        country = data.get("country")
+        condition = data.get("condition")
 
         chart_prompt = (
-            f"一位{data.get('age')}岁来自{data.get('country')}的{data.get('gender')}有健康问题：“{data.get('condition')}”，"
+            f"一位{age}岁来自{country}的{gender}有健康问题：“{condition}”，"
             f"补充说明：“{details}”。请为此档案生成3个不同的健康指标类别。每个类别必须以“###”开头，"
             f"并有3个格式为“指标名称: 数值%”的指标。数值必须在25-90之间。请仅用简体中文回答。"
         )
         metrics = generate_metrics_with_ai_zh(chart_prompt)
         
-        summary_prompt = build_summary_prompt_zh(age, data.get('gender'), data.get('country'), data.get('condition'), details, metrics)
+        summary_prompt = build_summary_prompt_zh(age, gender, country, condition, details, metrics)
         summary = get_openai_response(summary_prompt)
         
-        suggestions_prompt = build_suggestions_prompt_zh(age, data.get('gender'), data.get('country'), data.get('condition'), details)
+        suggestions_prompt = build_suggestions_prompt_zh(age, gender, country, condition, details)
         creative = get_openai_response(suggestions_prompt, temp=0.85)
 
         summary_paragraphs = [p.strip() for p in summary.split('\n') if p.strip()]
@@ -176,6 +179,4 @@ def health_analyze_zh():
 
 if __name__ == "__main__":
     port = int(os.getenv("PORT", 5003))
-    # Note: This will run only the Chinese endpoint if you run this file directly.
-    # For a real application, you might merge this with the English `app.py`.
     app.run(debug=True, port=port, host="0.0.0.0")
