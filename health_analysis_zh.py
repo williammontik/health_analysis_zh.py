@@ -181,15 +181,10 @@ def health_analyze():
         
         html_result += generate_footer_html() + "</div>"
         
-        # **FIXED: THIS SECTION WAS MISSING AND IS NOW RE-ADDED**
-        # --- Build and Send Full Email ---
-        charts_html = "<div style='margin-top:30px;'><strong style='font-size:18px;'>📈 健康指標分析:</strong><br><br>"
-        for block in metrics:
-            charts_html += f"<h4 style='margin-bottom:6px; margin-top:20px;'>{block['title']}</h4>"
-            for label, value in zip(block['labels'], block['values']):
-                charts_html += f"<div style='margin:6px 0;'><span style='font-size:15px;'>{label}: {value}%</span><br><div style='background:#eee; border-radius:6px; width:100%; max-width:500px; height:14px;'><div style='width:{value}%; background:#4CAF50; height:14px; border-radius:6px;'></div></div></div>"
-        charts_html += "</div>"
-
+        # --- Build and Send Email ---
+        # **FIXED: Simplified the email content to prevent crashes.**
+        # The complex charts_html section has been removed from the email.
+        
         data_table = f"<div style='margin-top:20px; font-size:16px; font-family: sans-serif;'><strong>📌 您提交的資訊:</strong><br><br><ul style='line-height:1.8; padding-left:18px;'>"
         for key, value in user_info.items():
             label_text = labels.get(key, key.replace('_', ' ').title())
@@ -197,9 +192,9 @@ def health_analyze():
             data_table += f"<li><strong>{label_text}:</strong> {value}</li>"
         data_table += "</ul></div>"
 
-        full_email_html = data_table + html_result.replace('sans-serif', 'Arial, sans-serif') + charts_html
+        # The email will contain the user's data and the full AI-generated report.
+        full_email_html = data_table + html_result.replace('sans-serif', 'Arial, sans-serif')
         send_email(full_email_html, lang)
-        # **END OF FIXED SECTION**
         
         return jsonify({
             "metrics": metrics,
