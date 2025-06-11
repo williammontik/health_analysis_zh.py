@@ -45,18 +45,10 @@ def build_single_request_prompt_zh(age, gender, country, concern, notes):
         f"提出10条具体、温和且实用的生活方式改善建议。建议应为编号列表，并包含表情符号。\n\n"
         f"--- RESPONSE FORMAT ---\n"
         f"请严格按照以下结构和分隔符提供您的回答，不要添加任何额外的介绍或结语。\n\n"
-        f"[METRICS_START]\n"
-        f"\n"
-        f"[METRICS_END]\n\n"
-        f"[SUMMARY_START]\n"
-        f"\n"
-        f"[SUMMARY_END]\n\n"
-        f"[SUGGESTIONS_START]\n"
-        f"\n"
-        f"[SUGGESTIONS_END]"
+        f"[METRICS_START]\n\n[METRICS_END]\n\n[SUMMARY_START]\n\n[SUMMARY_END]\n\n[SUGGESTIONS_START]\n\n[SUGGESTIONS_END]"
     )
 
-# --- HELPER FUNCTIONS ---
+# --- HELPERS ---
 def compute_age(dob_year):
     try:
         return datetime.now().year - int(dob_year)
@@ -82,6 +74,83 @@ def parse_metrics_from_response(response_text):
     try:
         metrics_str = response_text.split("[METRICS_START]")[1].split("[METRICS_END]")[0].strip()
         metrics, current_title, labels, values = [], "", [], []
-        for line in metrics_str.strip().split("\n"):
+
+        for line in metrics_str.splitlines():
             line = line.strip()
-            if not line or line.startswith("
+            if not line or line.startswith("###"):
+                if labels and values:
+                    metrics.append({
+                        "title": current_title,
+                        "labels": labels,
+                        "values": values
+                    })
+                    labels, values = [], []
+                current_title = line.replace("###", "").strip()
+            elif ":" in line:
+                label, val = line.split(":")
+                labels.append(label.strip())
+                values.append(int(re.findall(r"\d+", val.strip())[0]))
+
+        if labels and values:
+            metrics.append({
+                "title": current_title,
+                "labels": labels,
+                "values": values
+            })
+
+        return metrics
+    except Exception as e:
+        logging.error(f"Error parsing metrics: {e}")
+        return []
+
+def extract_block(response_text, start_tag, end_tag):
+    try:
+        return response_text.split(start_tag)[1].split(end_tag)[0].strip()
+    except Exception:
+        return ""
+
+# --- MAIN ENDPOINT ---
+@app.route("/health_analyze_zh", methods=["POST"])
+def analyze_health_zh():
+    try:
+        data = request.json
+        age = compute_age(data.get("dob_year"))
+        gender = data.get("gender", "")
+        country = data.get("country", "")
+        concern = data.get("condition", "")
+        notes = data.get("details", "")
+
+        prompt = build_single_request_prompt_zh(age, gender, country, concern, notes)
+        logging.info("Sending prompt to OpenAI...")
+
+        response_text = get_openai_response(prompt)
+
+        metrics = parse_metrics_from_response(response_text)
+        summary = extract_block(response_text, "[SUMMARY_START]", "[SUMMARY_END]")
+        suggestions = extract_block(response_text, "[SUGGESTIONS_START]", "[SUGGESTIONS_END]")
+
+        summary_html = summary.replace('\n', '<br>')
+        suggestions_html = suggestions.replace('\n', '<br>')
+
+        html_result = f"""
+        <h4>{LABELS_ZH['summary_title']}</h4>
+        <p>{summary_html}</p>
+        <h4>{LABELS_ZH['suggestions_title']}</h4>
+        <p>{suggestions_html}</p>
+        <p style=\"margin-top:30px;font-size:14px;color:#888;\">
+          🤖 此报告由 KataChat AI 健康分析系统自动生成，仅供参考。我们不会存储您的任何个人数据。
+        </p>
+        """
+
+        return jsonify({
+            "metrics": metrics,
+            "html_result": html_result
+        })
+
+    except Exception as e:
+        logging.error(traceback.format_exc())
+        return jsonify({"error": "❌ 系统处理失败，请检查输入或稍后重试。"}), 500
+
+# --- APP ENTRY POINT ---
+if __name__ == "__main__":
+    app.run(host="0.0.0.0", port=int(os.environ.get("PORT", 5000)))
