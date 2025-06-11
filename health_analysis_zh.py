@@ -1,8 +1,5 @@
 # -*- coding: utf-8 -*-
-import os
-import logging
-import smtplib
-import traceback
+import os, logging, smtplib, traceback
 from datetime import datetime
 from dateutil import parser
 from email.mime.text import MIMEText
@@ -12,7 +9,7 @@ from openai import OpenAI
 
 app = Flask(__name__)
 CORS(app)
-logging.basicConfig(level=logging.DEBUG)
+logging.basicConfig(level=logging.INFO) # Changed to INFO for cleaner production logs
 
 # --- Config ---
 client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
@@ -44,116 +41,181 @@ def compute_age(dob):
         dt = parser.parse(dob)
         today = datetime.today()
         return today.year - dt.year - ((today.month, today.day) < (dt.month, dt.day))
-    except:
-        return 0
+    except: return 0
 
-# --- AI Prompt Builders ---
-# (unchanged build_summary_prompt and build_suggestions_prompt)
-
+# --- AI Prompts (Simplified Chinese) ---
 def build_summary_prompt(age, gender, country, concern, notes, metrics):
-    metrics_summary = ", ".join([
-        f"{label} ({value}%)" for block in metrics for label, value in zip(block["labels"], block["values"])][:9]
-    )
+    metrics_summary = ", ".join([f"{label} ({value}%)" for block in metrics for label, value in zip(block["labels"], block["values"])][:9])
     return (
         f"任务：为一位来自 {country} 的 {age} 岁 {gender} 撰写一份四段式的健康分析，其主要问题是“{concern}”。请使用以下数据：{metrics_summary}。\n\n"
-        "1. 深入分析：不要只重复数据。请解释这些百分比..."
-        # full prompt omitted for brevity
+        f"指令：\n"
+        f"1. **深入分析**：不要只重复数据。请解释这些百分比数字对这个用户群体意味着什么，并分析它们之间的联系。例如，高皮脂分泌如何影响皮肤问题。\n"
+        f"2. **内容丰富**：每个段落都应提供有价值的见解和背景信息，使其内容充实。\n"
+        f"3. **专业且匿名**：语气应充满同理心但专业。严禁使用“你”、“我”等代词。请使用“该年龄段的女性...”或“来自 {country} 的个体...”等措辞。\n"
+        f"4. **整合数据**：每段话中都必须自然地融入至少一个具体的百分比数据。"
     )
 
 def build_suggestions_prompt(age, gender, country, concern, notes):
     return (
         f"为一位来自 {country}、{age} 岁、关注“{concern}”的“{gender}”，提出 10 项具体而温和的生活方式改善建议。"
-        # full prompt omitted
+        f"请使用温暖、支持的语气，并包含有帮助的表情符号。"
+        f"建议应实用、符合文化习惯且具滋养性。"
+        f"⚠️ **严格指令**：请勿使用姓名、代词（她/她的/他/他的）或“该个体”等词语。"
+        f"仅使用如“在 {country} 60多岁的女性”或“面临此问题的个体”等描述。"
     )
 
-# --- OpenAI Helpers ---
+# --- OpenAI Interaction ---
 def get_openai_response(prompt, temp=0.7):
     try:
-        res = client.chat.completions.create(
-            model="gpt-4o", messages=[{"role":"user","content":prompt}], temperature=temp
+        result = client.chat.completions.create(
+            model="gpt-4o", messages=[{"role": "user", "content": prompt}], temperature=temp
         )
-        return res.choices[0].message.content
+        return result.choices[0].message.content
     except Exception as e:
         logging.error(f"OpenAI error: {e}")
         return "⚠️ 无法生成回应。"
 
 def generate_metrics_with_ai(prompt):
     try:
-        # generate and parse metrics blocks
-        ...
+        res = client.chat.completions.create(
+            model="gpt-4o", messages=[{"role": "user", "content": prompt}], temperature=0.7
+        )
+        lines = res.choices[0].message.content.strip().split("\n")
+        metrics = []
+        current_title, labels, values = "", [], []
+        for line in lines:
+            if line.startswith("###"):
+                if current_title: metrics.append({"title": current_title, "labels": labels, "values": values})
+                current_title, labels, values = line.replace("###", "").strip(), [], []
+            elif ":" in line:
+                try:
+                    label, val = line.split(":", 1)
+                    labels.append(label.strip())
+                    values.append(int(val.strip().replace("%", "")))
+                except ValueError: continue
+        if current_title: metrics.append({"title": current_title, "labels": labels, "values": values})
+        return metrics or [{"title": "默认指标", "labels": ["指标A", "指标B"], "values": [50, 75]}]
     except Exception as e:
-        logging.error(f"Metrics error: {e}")
-        return [{"title":"默认指标","labels":["指标A","指标B"],"values":[50,75]}]
+        logging.error(f"Chart parse error: {e}")
+        return [{"title": "默认指标", "labels": ["指标A", "指标B"], "values": [50, 75]}]
 
-# --- HTML Footer ---
+# --- HTML & Email Generation (Simplified Chinese) ---
 def generate_footer_html():
     return """
-<div style='margin-top:40px; ...'>
-  <!-- footer content -->
-</div>
-"""
+    <div style="margin-top: 40px; border-left: 4px solid #4CAF50; padding-left: 15px; font-family: sans-serif;">
+        <h3 style="font-size: 22px; font-weight: bold; color: #333;">📊 由 KataChat AI 生成的见解</h3>
+        <p style="font-size: 18px; color: #555; line-height: 1.6;">
+            此健康报告是使用 KataChat 的专有 AI 模型生成的，基于：
+        </p>
+        <ul style="list-style-type: disc; padding-left: 20px; font-size: 18px; color: #555; line-height: 1.6;">
+            <li>来自新加坡、马来西亚和台湾用户的匿名健康与生活方式资料库</li>
+            <li>来自可信的 OpenAI 研究数据库的全球健康基准和行为趋势数据</li>
+        </ul>
+        <p style="font-size: 18px; color: #555; line-height: 1.6;">
+            所有分析严格遵守个人数据保护法规，以保护您的个人资料，同时发掘有意义的健康洞察。
+        </p>
+        <p style="font-size: 18px; color: #555; line-height: 1.6; margin-top: 15px;">
+            🛡️ <strong>请注意：</strong>本报告并非医疗诊断。若有任何严重的健康问题，请咨询持牌医疗专业人员。
+        </p>
+        <p style="font-size: 18px; color: #555; line-height: 1.6; margin-top: 15px;">
+            📬 <strong>附注：</strong>个性化报告将在 24-48 小时内发送到您的电子邮箱。若您想更详细地探讨报告结果，我们很乐意安排一个 15 分钟的简短通话。
+        </p>
+    </div>
+    """
 
-# --- Email Helper ---
-def send_email(html_body, lang):
-    subject = LANGUAGE[lang]['email_subject']
-    msg = MIMEText(html_body, 'html', 'utf-8')
-    msg['Subject'] = subject
-    msg['From'] = SMTP_USERNAME
-    msg['To'] = SMTP_USERNAME
-    with smtplib.SMTP(SMTP_SERVER, SMTP_PORT) as server:
-        server.starttls()
-        server.login(SMTP_USERNAME, SMTP_PASSWORD)
-        server.send_message(msg)
-        logging.info("✅ 已发送邮件: %s", subject)
+# --- NEW: Email Sending Function ---
+def send_email_report(recipient_email, subject, body):
+    """
+    Connects to the SMTP server and sends the HTML report as an email.
+    """
+    if not all([SMTP_SERVER, SMTP_USERNAME, SMTP_PASSWORD]):
+        logging.warning("SMTP settings are not fully configured. Skipping email.")
+        return
+
+    try:
+        msg = MIMEText(body, 'html', 'utf-8')
+        msg['Subject'] = subject
+        msg['From'] = SMTP_USERNAME
+        msg['To'] = recipient_email
+
+        with smtplib.SMTP(SMTP_SERVER, SMTP_PORT) as server:
+            server.ehlo()
+            server.starttls()
+            server.ehlo()
+            server.login(SMTP_USERNAME, SMTP_PASSWORD)
+            server.sendmail(SMTP_USERNAME, [recipient_email], msg.as_string())
+            logging.info(f"Successfully sent health report to {recipient_email}")
+
+    except Exception as e:
+        logging.error(f"Failed to send email to {recipient_email}: {e}")
+        traceback.print_exc()
+
 
 # --- Flask Endpoint ---
-@app.route('/health_analyze', methods=['POST'])
+@app.route("/health_analyze", methods=["POST"])
 def health_analyze():
     try:
         data = request.get_json(force=True)
-        lang = data.get('lang','zh').lower()
+        lang = data.get("lang", "zh").strip().lower()
+        
+        if lang != 'zh':
+            return jsonify({"error": "This endpoint only supports Chinese (zh) language."}), 400
+
         labels = LANGUAGE_TEXTS[lang]
         content_lang = LANGUAGE[lang]
-
-        # parse dob & compute age
-        dob = f"{data['dob_year']}-{int(data['dob_month']):02d}-{int(data['dob_day']):02d}"
+        
+        dob = f"{data.get('dob_year')}-{str(data.get('dob_month')).zfill(2)}-{str(data.get('dob_day')).zfill(2)}"
         age = compute_age(dob)
+        
+        user_info = {k: data.get(k) for k in ["name", "chinese_name", "gender", "height", "weight", "country", "condition", "referrer", "angel"]}
+        user_info.update({"dob": dob, "age": age, "notes": data.get("details") or "无补充说明"})
 
-        # build metrics via AI
-        chart_prompt = ( ... )
+        chart_prompt = (
+            f"这是一位来自 {user_info['country']} 的 {user_info['age']} 岁 {user_info['gender']}，其健康问题为“{user_info['condition']}'。补充说明：{user_info['notes']}\n\n"
+            f"请根据此问题生成 3 个不同的健康相关指标类别。\n"
+            f"每个类别必须以 '###' 开头（例如 '### 睡眠质量'），并包含 3 个独特的真实世界指标，格式为 '指标名称: 68%'.\n"
+            f"所有百分比必须介于 25% 到 90% 之间。\n"
+            f"仅返回 3 个格式化的区块，不要有任何介绍或解释。"
+        )
+
         metrics = generate_metrics_with_ai(chart_prompt)
+        
+        summary_prompt = build_summary_prompt(age, user_info['gender'], user_info['country'], user_info['condition'], user_info['notes'], metrics)
+        summary = get_openai_response(summary_prompt)
+        if "⚠️" in summary: summary = "💬 由于系统延迟，摘要暂时无法使用。"
 
-        # build narrative
-        summary = get_openai_response(build_summary_prompt(age, ...), temp=0.7)
-        suggestions = get_openai_response(build_suggestions_prompt(age, ...), temp=0.85)
+        suggestions_prompt = build_suggestions_prompt(age, user_info['gender'], user_info['country'], user_info['condition'], user_info['notes'])
+        creative = get_openai_response(suggestions_prompt, temp=0.85)
+        if "⚠️" in creative: creative = "💡 目前无法加载建议。请稍后再试。"
 
-        # assemble html_result
-        html_result = '<div style="font-family:sans-serif;">'
-        html_result += ...  # summary & suggestions & footer
-        html_result += generate_footer_html()
+        # Construct the full HTML report for both the web and email
+        html_result = f"<div style='font-family: sans-serif; color: #333; max-width: 800px; margin: auto;'>"
+        html_result += f"<h1 style='text-align:center;'>{content_lang.get('report_title')} for {user_info['name']}</h1>"
+        html_result += "<div style='font-size:24px; font-weight:bold; margin-top:30px;'>🧠 摘要:</div>"
+        html_result += "".join([f"<p style='line-height:1.7; font-size:16px; margin-top:1em; margin-bottom:1em;'>{p.strip()}</p>" for p in summary.strip().split('\n\n') if p.strip()])
+        
+        html_result += "<div style='font-size:24px; font-weight:bold; margin-top:40px;'>💡 生活建议:</div>"
+        html_result += "".join([f"<p style='margin:16px 0; font-size:17px; line-height:1.6;'>{line}</p>" for line in creative.split("\n") if line.strip()])
+        
+        html_result += generate_footer_html() + "</div>"
+        
+        # --- MODIFIED: Call the email function before sending the response ---
+        email_subject = f"{content_lang.get('email_subject')} - {user_info.get('name', 'N/A')}"
+        send_email_report(SMTP_USERNAME, email_subject, html_result)
 
-        # --- SEND EMAIL ---
-        # build simple metrics table
-        metrics_table = ''
-        for block in metrics:
-            metrics_table += f"<h4>{block['title']}</h4>"
-            for lbl, val in zip(block['labels'], block['values']):
-                metrics_table += f"<p>{lbl}: {val}%</p>"
-        # combine and send
-        send_email(metrics_table + html_result, lang)
-
-        # return JSON
         return jsonify({
-            'metrics': metrics,
-            'html_result': html_result,
-            'footer': labels['footer'],
-            'report_title': content_lang['report_title']
+            "metrics": metrics,
+            "html_result": html_result,
+            "footer": labels.get('footer'),
+            "report_title": content_lang.get('report_title')
         })
 
     except Exception as e:
-        logging.error(f"Error in health_analyze: {e}")
+        logging.error(f"Health analyze error: {e}")
         traceback.print_exc()
-        return jsonify({'error':'服务器内部错误'}), 500
+        return jsonify({"error": "发生未预期的服务器错误。"}), 500
 
-if __name__ == '__main__':
-    app.run(host='0.0.0.0', port=int(os.getenv('PORT',5000)), debug=True)
+if __name__ == "__main__":
+    port = int(os.getenv("PORT", 5000))
+    # For production, it's better to use a proper WSGI server like Gunicorn instead of Flask's built-in server
+    app.run(debug=False, port=port, host="0.0.0.0")
