@@ -27,7 +27,6 @@ LABELS_ZH = {
 }
 
 # --- PROMPT ENGINEERING (CHINESE) ---
-# RESTORED: Using our tested, high-quality prompt for the single-call method.
 def build_single_request_prompt_zh(age, gender, country, concern, notes):
     return (
         f"你是一位专业的健康分析师。请根据以下个人档案，严格按照指定的格式，一次性完成三项任务。\n\n"
@@ -79,7 +78,6 @@ def get_openai_response(prompt, temp=0.75):
         logging.error(f"OpenAI API call failed: {e}")
         return "⚠️ AI响应生成失败，请稍后再试。"
 
-# REVERTED: Using our original, more robust parsing functions.
 def parse_metrics_from_response(response_text):
     try:
         metrics_str = response_text.split("[METRICS_START]")[1].split("[METRICS_END]")[0].strip()
