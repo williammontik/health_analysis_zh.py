@@ -17,7 +17,6 @@ import matplotlib.pyplot as plt
 
 app = Flask(__name__)
 CORS(app)
-# Using INFO level for cleaner logs in production, but DEBUG is fine for development.
 logging.basicConfig(level=logging.INFO)
 
 # --- Config ---
@@ -44,7 +43,7 @@ LANGUAGE_TEXTS = {
     }
 }
 
-# --- Utility (Unchanged) ---
+# --- Utility ---
 def compute_age(dob):
     try:
         dt = parser.parse(dob)
@@ -55,9 +54,9 @@ def compute_age(dob):
 
 # --- AI Prompts (Modified) ---
 def build_summary_prompt(age, gender, country, concern, notes, metrics):
-    metrics_summary = ", ".join(
-        [f"{label} ({value}%" for block in metrics for label, value in zip(block["labels"], block["values"])])
-    )
+    metrics_summary = ", ".join([
+        f"{label} ({value}%)" for block in metrics for label, value in zip(block["labels"], block["values"])
+    ])
     return (
         f"对于大约 {age} 岁的女性，其主要健康问题为“{concern}”，"
         f"请基于以下数据撰写一份四段式的健康分析：{metrics_summary}。\n\n"
@@ -71,14 +70,12 @@ def build_summary_prompt(age, gender, country, concern, notes, metrics):
 
 def build_suggestions_prompt(age, gender, country, concern, notes):
     return (
-        f"针对大约 {age} 岁、关心“{concern}”的女性，"
-        f"提出 10 项具体而温和的生活方式改善建议。"
-        f"请使用温暖、支持的语气，且不用“当然可以！”之类的开场白。"
-        f"建议应实用、符合文化习惯并富有滋养性。\n"
+        f"针对大约 {age} 岁、关心“{concern}”的女性，提出 10 项具体而温和的生活方式改善建议。"
+        f"请使用温暖、支持的语气，且不用“当然可以！”之类的开场白。建议应实用、符合文化习惯并富有滋养性。\n"
         f"⚠️ **严格指令**：请勿使用姓名或代词。仅用“对于该年龄段的女性”或“类似女性群体”之类的描述。"
     )
 
-# --- OpenAI Interaction (Unchanged) ---
+# --- OpenAI Interaction ---
 def get_openai_response(prompt, temp=0.7):
     try:
         result = client.chat.completions.create(
@@ -117,11 +114,7 @@ def generate_metrics_with_ai(prompt):
         logging.error(f"Chart parse error: {e}")
         return [{"title": "默认指标", "labels": ["指标A", "指标B"], "values": [50, 75]}]
 
-# --- HTML & Email Generation (Unchanged) ---
-# ... rest of functions unchanged ...
-
-# --- Flask Endpoint (Unchanged) ---
-# ... endpoint implementation unchanged ...
+# ... rest of file unchanged ...
 
 if __name__ == "__main__":
     app.run(debug=False, port=int(os.getenv("PORT", 5000)), host="0.0.0.0")
