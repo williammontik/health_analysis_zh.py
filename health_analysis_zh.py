@@ -18,7 +18,7 @@ SMTP_PORT = 587
 SMTP_USERNAME = "kata.chatbot@gmail.com"
 SMTP_PASSWORD = os.getenv("SMTP_PASSWORD")
 
-# --- Language Constants (Translated to zh-CN) ---
+# --- Language Constants (Simplified Chinese) ---
 LANGUAGE = {
     "zh": {
         "email_subject": "您的健康洞察报告",
@@ -43,28 +43,28 @@ def compute_age(dob):
         return today.year - dt.year - ((today.month, today.day) < (dt.month, dt.day))
     except: return 0
 
-# --- AI Prompts (Simplified Chinese) ---
+# --- AI Prompts (Simplified Chinese - Rewritten for Speed) ---
 def build_summary_prompt(age, gender, country, concern, notes, metrics):
+    """
+    **FINAL FIX:** This prompt is extremely simple and direct to ensure maximum speed.
+    """
     metrics_summary = ", ".join([f"{label} ({value}%)" for block in metrics for label, value in zip(block["labels"], block["values"])][:9])
     return (
-        f"任务：为一位来自 {country} 的 {age} 岁 {gender} 撰写一份四段式的健康分析，其主要问题是“{concern}”。请使用以下数据：{metrics_summary}。\n\n"
-        f"指令：\n"
-        f"1. **深入分析**：不要只重复数据。请解释这些百分比数字对这个用户群体意味着什么，并分析它们之间的联系。例如，高皮脂分泌如何影响皮肤问题。\n"
-        f"2. **内容丰富**：每个段落都应提供有价值的见解和背景信息，使其内容充实。\n"
-        f"3. **专业且匿名**：语气应充满同理心但专业。严禁使用“你”、“我”等代词。请使用“该年龄段的女性...”或“来自 {country} 的个体...”等措辞。\n"
-        f"4. **整合数据**：每段话中都必须自然地融入至少一个具体的百分比数据。"
+        f"为一位 {age} 岁的 {gender}（来自 {country}，主要问题：“{concern}”）写一篇4段的健康总结。"
+        f"必须使用这些数据：{metrics_summary}。"
+        f"分析数据并解释其含义。每段必须包含至少一个百分比。不要用“你”或“您”。"
     )
 
 def build_suggestions_prompt(age, gender, country, concern, notes):
+    """
+    **FINAL FIX:** This prompt is also simplified for speed.
+    """
     return (
-        f"为一位来自 {country}、{age} 岁、关注“{concern}”的“{gender}”，提出 10 项具体而温和的生活方式改善建议。"
-        f"请使用温暖、支持的语气，并包含有帮助的表情符号。"
-        f"建议应实用、符合文化习惯且具滋养性。"
-        f"⚠️ **严格指令**：请勿使用姓名、代词（她/她的/他/他的）或“该个体”等词语。"
-        f"仅使用如“在 {country} 60多岁的女性”或“面临此问题的个体”等描述。"
+        f"为一位 {age} 岁的 {gender}（来自 {country}，问题：“{concern}”）建议10个生活方式的改善点。"
+        f"使用表情符号。不要用“你”或“您”。"
     )
 
-# --- OpenAI Interaction (Matches English Version) ---
+# --- OpenAI Interaction ---
 def get_openai_response(prompt, temp=0.7):
     try:
         result = client.chat.completions.create(
@@ -91,15 +91,13 @@ def generate_metrics_with_ai(prompt):
             if line.startswith("###"):
                 if current_title and labels and values:
                     metrics.append({"title": current_title, "labels": labels, "values": values})
-                current_title = line.replace("###", "").strip()
-                labels, values = [], []
+                current_title, labels, values = line.replace("###", "").strip(), [], []
             elif ":" in line:
                 try:
                     label, val = line.split(":", 1)
                     labels.append(label.strip())
                     values.append(int(val.strip().replace("%", "")))
-                except ValueError:
-                    continue
+                except ValueError: continue
         if current_title and labels and values:
             metrics.append({"title": current_title, "labels": labels, "values": values})
         return metrics or [{"title": "默认指标", "labels": ["指标A", "指标B"], "values": [50, 75]}]
@@ -145,7 +143,7 @@ def send_email(html_body, lang):
     except Exception as e:
         logging.error(f"Email send error: {e}")
 
-# --- Flask Endpoints ---
+# --- Flask Endpoints (Structure matches working English version) ---
 @app.route("/health_analyze", methods=["POST"])
 def health_analyze():
     try:
@@ -232,7 +230,7 @@ def health_analyze():
         traceback.print_exc()
         return jsonify({"error": "发生未预期的服务器错误。"}), 500
 
-# **NEW** WAKEUP ENDPOINT TO PREVENT TIMEOUTS
+# WAKEUP ENDPOINT TO PREVENT TIMEOUTS
 @app.route("/wakeup", methods=["GET"])
 def wakeup():
     """
